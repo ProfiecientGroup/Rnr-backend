@@ -8,9 +8,16 @@ import googlemaps
 from itertools import permutations
 import re
 import math
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="Taxi Service API")
-
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 # Constants
 BASE_ADDRESS = "46 Eamer Crescent, Wokingham, UK"
 CONGESTION_CHARGE = 15.0
