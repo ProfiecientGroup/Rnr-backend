@@ -1,13 +1,9 @@
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from typing import List, Optional, Dict, Tuple
 from datetime import datetime
 from enum import Enum
 import os
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from decimal import Decimal
 import googlemaps
 from itertools import permutations
 import re
@@ -22,32 +18,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-class FormField(BaseModel):
-    value: str
-    error: str
-
-
-class ContactFormRequest(BaseModel):
-    firstName: FormField
-    email: FormField
-    phone: FormField
-    message: FormField
-
-
-class ContactFormResponse(BaseModel):
-    success: bool
-    message: str
-
-
-# Email configuration
-EMAIL_HOST = "smtp.gmail.com"  # Replace with your SMTP server
-EMAIL_PORT = 587
-# These should be set as environment variables in production
-EMAIL_USERNAME = "shreya.softsages@gmail.com"
-EMAIL_PASSWORD = os.environ.get("EMAIL_PASSWORD", "your-app-password")
-RECIPIENT_EMAIL = "shreya.softsages@gmail.com"
 
 # Constants
 BASE_ADDRESS = "46 Eamer Crescent, Wokingham, UK"
@@ -455,36 +425,3 @@ async def calculate_booking_prices(request: BookingRequest) -> PricingResponse:
     return calculator.calculate_prices(request)
 
 
-@app.post("/submit-contact-form", response_model=ContactFormResponse)
-async def submit_contact_form(request: ContactFormRequest) -> ContactFormResponse:
-    try:
-        email_body = f"""
-        New Contact Form Submission:
-
-        Name: {request.firstName.value}
-        Email: {request.email.value}
-        Phone: {request.phone.value}
-        Message: {request.message.value}
-        """
-
-        # Set up the email
-        msg = MIMEMultipart()
-        msg['From'] = EMAIL_USERNAME
-        msg['To'] = RECIPIENT_EMAIL
-        msg['Subject'] = "New Contact Form Submission"
-        msg.attach(MIMEText(email_body, 'plain'))
-
-        # Send the email
-        server = smtplib.SMTP(EMAIL_HOST, EMAIL_PORT)
-        server.starttls()
-        server.login(EMAIL_USERNAME, EMAIL_PASSWORD)
-        server.send_message(msg)
-        server.quit()
-
-        return ContactFormResponse(
-            success=True,
-            message="Form submitted successfully"
-        )
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
