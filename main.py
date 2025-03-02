@@ -1,8 +1,12 @@
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from typing import List, Optional, Dict, Tuple
 from datetime import datetime
 from enum import Enum
+import os
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from decimal import Decimal
 import googlemaps
 from itertools import permutations
@@ -18,6 +22,33 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+class FormField(BaseModel):
+    value: str
+    error: str
+
+
+class ContactFormRequest(BaseModel):
+    firstName: FormField
+    email: FormField
+    phone: FormField
+    message: FormField
+
+
+class ContactFormResponse(BaseModel):
+    success: bool
+    message: str
+
+
+# Email configuration
+EMAIL_HOST = "smtp.gmail.com"  # Replace with your SMTP server
+EMAIL_PORT = 587
+# These should be set as environment variables in production
+EMAIL_USERNAME = "shreya.softsages@gmail.com"
+EMAIL_PASSWORD = os.environ.get("EMAIL_PASSWORD", "your-app-password")
+RECIPIENT_EMAIL = "shreya.softsages@gmail.com"
+
 # Constants
 BASE_ADDRESS = "46 Eamer Crescent, Wokingham, UK"
 CONGESTION_CHARGE = 15.0
@@ -164,10 +195,10 @@ class TaxiPricingCalculator:
             charge = 0
             explanation = f"Distance {distance:.1f} miles (≤ 3 miles): £0.00"
         elif distance <= 5:
-            charge = 15
+            charge = 10
             explanation = f"Distance {distance:.1f} miles (3-5 miles): £10.00"
         elif distance <= 10:
-            charge = 30
+            charge = 15
             explanation = f"Distance {distance:.1f} miles (5-10 miles): £15.00"
         else:
             charge_bracket = math.ceil((distance - 10) / 5)
@@ -183,19 +214,19 @@ class TaxiPricingCalculator:
         explanation = ""
 
         if distance <= 36:
-            rate = 2.5
+            rate = 2.1
             explanation = f"Journey distance {distance:.1f} miles (≤ 50 miles): {distance:.1f} × £2.50 = £{distance * rate:.2f}"
         elif distance <= 49:
-            rate = 2.9
+            rate = 2.5
             explanation = f"Journey distance {distance:.1f} miles (≤ 50 miles): {distance:.1f} × £2.9 = £{distance * rate:.2f}"
         elif distance <= 69:
-            rate = 2.0
+            rate = 1.9
             explanation = f"Journey distance {distance:.1f} miles (50-100 miles): {distance:.1f} × £2.0 = £{distance * rate:.2f}"
         elif distance <= 89:
-            rate = 1.7
+            rate = 1.6
             explanation = f"Journey distance {distance:.1f} miles (50-100 miles): {distance:.1f} × £1.7 = £{distance * rate:.2f}"
         else:
-            rate = 1.9
+            rate = 1.7
             explanation = f"Journey distance {distance:.1f} miles (> 100 miles): {distance:.1f} × £2.00 = £{distance * rate:.2f}"
 
         return distance * rate, explanation
@@ -422,3 +453,38 @@ async def calculate_booking_prices(request: BookingRequest) -> PricingResponse:
         raise HTTPException(status_code=400, detail="At least one pickup and one dropoff location required")
 
     return calculator.calculate_prices(request)
+
+
+@app.post("/submit-contact-form", response_model=ContactFormResponse)
+async def submit_contact_form(request: ContactFormRequest) -> ContactFormResponse:
+    try:
+        email_body = f"""
+        New Contact Form Submission:
+
+        Name: {request.firstName.value}
+        Email: {request.email.value}
+        Phone: {request.phone.value}
+        Message: {request.message.value}
+        """
+
+        # Set up the email
+        msg = MIMEMultipart()
+        msg['From'] = EMAIL_USERNAME
+        msg['To'] = RECIPIENT_EMAIL
+        msg['Subject'] = "New Contact Form Submission"
+        msg.attach(MIMEText(email_body, 'plain'))
+
+        # Send the email
+        server = smtplib.SMTP(EMAIL_HOST, EMAIL_PORT)
+        server.starttls()
+        server.login(EMAIL_USERNAME, EMAIL_PASSWORD)
+        server.send_message(msg)
+        server.quit()
+
+        return ContactFormResponse(
+            success=True,
+            message="Form submitted successfully"
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
